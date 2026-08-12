@@ -1,0 +1,9 @@
+.DS_Store
+
+# arduino-cli가 만드는 것들. 다시 생성되므로 올리지 않는다.
+build/
+*.hex
+*.elf
+*.zip
+
+__pycache__/

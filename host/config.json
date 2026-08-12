@@ -1,0 +1,10 @@
+{
+  "_설명": "버튼 번호 → 열 것. app은 /Applications 안의 앱 이름, url은 기본 브라우저로 엽니다. 둘 다 있으면 app이 이깁니다.",
+  "port": null,
+  "buttons": {
+    "1": { "name": "클로드",     "app": "Claude" },
+    "2": { "name": "노션",       "app": "Notion" },
+    "3": { "name": "인스타그램", "url": "https://www.instagram.com" },
+    "4": { "name": "팀즈",       "app": "Microsoft Teams" }
+  }
+}
