@@ -45,14 +45,16 @@ python3 ~/Documents/Arduino/nu40dk_launcher/host/launcher.py    # 또는 run.com
 
 ## 펌웨어 올리기
 
-**아직 안 올라가 있다.** 지금 보드엔 `nu40dk_together`가 들어 있고, 그건 버튼을
-전혀 읽지 않아서 눌러도 시리얼로 아무것도 안 나온다. 런처를 쓰려면 한 번 구워야 한다.
+2026-08-12 업로드·실물 검증 완료. 버튼 4개 모두 `BTN1`~`BTN4`가 나오는 것을 확인했다.
+고친 뒤 다시 구울 때만 아래를 쓴다.
 
 ```sh
 CLI="/Applications/Arduino IDE.app/Contents/Resources/app/lib/backend/resources/arduino-cli"
 "$CLI" compile --fqbn nucode:nrf52:nu40dk ~/Documents/Arduino/nu40dk_launcher
-"$CLI" upload  --fqbn nucode:nrf52:nu40dk -p /dev/cu.usbmodem1101 ~/Documents/Arduino/nu40dk_launcher
+"$CLI" upload  --fqbn nucode:nrf52:nu40dk -p /dev/cu.usbmodem12301 ~/Documents/Arduino/nu40dk_launcher
 ```
+
+포트 이름은 꽂을 때마다 바뀐다. `ls /dev/cu.usbmodem*`로 확인하고 넣는다.
 
 Together 보드로 되돌리려면 `~/Documents/Arduino/nu40dk_together`를 같은 방식으로 다시 올리면 된다.
 
