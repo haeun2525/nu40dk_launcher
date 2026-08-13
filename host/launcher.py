@@ -22,9 +22,13 @@ import subprocess
 import sys
 import termios
 import time
+import urllib.parse
 
-HERE        = os.path.dirname(os.path.abspath(__file__))
-CONFIG_PATH = os.path.join(HERE, "config.json")
+HERE          = os.path.dirname(os.path.abspath(__file__))
+CONFIG_PATH   = os.path.join(HERE, "config.json")
+FAREWELL_PAGE = os.path.join(HERE, "farewell.html")
+
+CHROME_BIN = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
 
 # 같은 버튼이 이 시간 안에 다시 들어오면 무시한다. 펌웨어가 디바운스를 하지만
 # 손가락이 떨려 두 번 눌리는 것까지는 막지 못한다. 앱이 두 번 뜨는 것보다
@@ -33,6 +37,12 @@ COOLDOWN_SEC = 0.8
 
 # 보드를 못 찾거나 끊겼을 때 다시 찾아보는 간격
 RECONNECT_SEC = 1.0
+
+# 한 모드에서 앱을 여러 개 열 때 사이 간격
+STAGGER_SEC = 0.35
+
+# 앱 종료를 기다려주는 한계. 넘어가면 포기하고 다음 앱으로 간다
+QUIT_TIMEOUT_SEC = 6.0
 
 BTN_RE = re.compile(r"^BTN([1-4])$")
 
@@ -100,24 +110,103 @@ def open_port(path):
     return fd
 
 
-def launch(entry):
-    """config.json 한 항목을 실행한다. 이미 떠 있는 앱이면 앞으로 끌어온다."""
-    name = entry.get("name", "?")
-
+def targets_of(entry):
+    """항목을 '열 것' 목록으로 편다. 예전의 단일 app/url 형식도 그대로 받는다."""
+    items = entry.get("open")
+    if items is not None:
+        return items
     if entry.get("app"):
-        cmd = ["open", "-a", entry["app"]]
-    elif entry.get("url"):
-        cmd = ["open", entry["url"]]
+        return [{"app": entry["app"]}]
+    if entry.get("url"):
+        return [{"url": entry["url"]}]
+    return []
+
+
+def open_item(item):
+    """앱 하나 또는 URL 하나. 이미 떠 있는 앱이면 앞으로 끌어온다."""
+    if item.get("app"):
+        cmd, label = ["open", "-a", item["app"]], item["app"]
+    elif item.get("url"):
+        cmd, label = ["open", item["url"]], item["url"]
     else:
-        log(f"'{name}'에 app도 url도 없습니다 — config.json 확인", YELLOW)
+        log(f"  ↳ 열 대상이 비었습니다: {item}", YELLOW)
         return
 
     result = subprocess.run(cmd, capture_output=True, text=True)
     if result.returncode == 0:
-        log(f"{BOLD}{name}{RESET} 열림", GREEN)
+        log(f"  ↳ {label} 열림", GREEN)
     else:
         detail = (result.stderr or "").strip() or f"open 종료코드 {result.returncode}"
-        log(f"'{name}' 못 엶 — {detail}", YELLOW)
+        log(f"  ↳ '{label}' 못 엶 — {detail}", YELLOW)
+
+
+def close_app(name):
+    """앱을 정상 종료시킨다."""
+    # is running을 먼저 보는 이유: quit만 보내면 안 떠 있던 앱이 오히려 실행된다.
+    # 퇴근 눌렀는데 앱이 켜지는 건 제일 보기 싫은 그림이다
+    script = f'if application "{name}" is running then quit application "{name}"'
+    try:
+        result = subprocess.run(["osascript", "-e", script],
+                                capture_output=True, text=True,
+                                timeout=QUIT_TIMEOUT_SEC)
+    except subprocess.TimeoutExpired:
+        # 저장 안 한 창이 있으면 앱이 물어보느라 안 죽는다. 여기서 계속 기다리면
+        # 런처 전체가 멈추므로 포기하고 넘어간다
+        log(f"  ↳ '{name}' 안 닫힘 — 저장할지 묻고 있는 것 같습니다", YELLOW)
+        return
+
+    if result.returncode == 0:
+        log(f"  ↳ {name} 닫힘", DIM)
+    else:
+        detail = (result.stderr or "").strip()[:80] or f"종료코드 {result.returncode}"
+        log(f"  ↳ '{name}' 못 닫음 — {detail}", YELLOW)
+
+
+def show_farewell(message):
+    """컨페티 화면을 크롬 앱 모드 창으로 띄운다."""
+    # --app은 탭도 주소창도 없는 창을 연다. 페이지가 끝나면 스스로 닫히므로
+    # 퇴근했는데 창이 남는 일이 없다.
+    # tkinter로 먼저 만들었다가 버렸다 — 이 맥의 Tk는 캔버스를 못 그리고
+    # 흰 화면만 남겼다 (root.update()에서 멈춤)
+    if not os.path.exists(FAREWELL_PAGE):
+        log("farewell.html이 없습니다 — 컨페티 건너뜀", YELLOW)
+        return
+    if not os.path.exists(CHROME_BIN):
+        log("크롬을 못 찾아 컨페티를 건너뜁니다", YELLOW)
+        return
+
+    url = ("file://" + urllib.parse.quote(FAREWELL_PAGE)
+           + "?msg=" + urllib.parse.quote(message))
+    try:
+        subprocess.Popen([CHROME_BIN, f"--app={url}", "--start-fullscreen"],
+                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        log("  ↳ 컨페티", GREEN)
+    except OSError as e:
+        log(f"  ↳ 컨페티 못 띄움 — {e}", YELLOW)
+
+
+def fire(entry):
+    """버튼 하나가 뜻하는 일을 전부 수행한다."""
+    name = entry.get("name", "?")
+    log(f"{BOLD}{name}{RESET}", CYAN)
+
+    # 닫기가 먼저다. 퇴근에서 컨페티가 마지막에 혼자 남아야 그림이 산다
+    for app in entry.get("close", []):
+        close_app(app)
+
+    items = targets_of(entry)
+    for i, item in enumerate(items):
+        # 한꺼번에 열면 창들이 서로 앞으로 나오려고 싸우고, 화면에도 안 예쁘다
+        if i:
+            time.sleep(STAGGER_SEC)
+        open_item(item)
+
+    message = entry.get("farewell")
+    if message:
+        show_farewell(message)
+
+    if not items and not entry.get("close") and not message:
+        log(f"'{name}'에 할 일이 없습니다 — config.json 확인", YELLOW)
 
 
 def run():
@@ -126,9 +215,22 @@ def run():
     print()
     log("NU40DK Launcher 시작", CYAN)
     for key in sorted(buttons):
-        target = buttons[key].get("app") or buttons[key].get("url") or "-"
-        log(f"  버튼 {key} → {buttons[key].get('name', '?')} {DIM}({target}){RESET}")
+        entry = buttons[key]
+        parts = [item.get("app") or item.get("url") or "?" for item in targets_of(entry)]
+        if entry.get("close"):
+            parts.append(f"{len(entry['close'])}개 닫기")
+        if entry.get("farewell"):
+            parts.append("컨페티")
+        log(f"  버튼 {key} → {entry.get('name', '?')} "
+            f"{DIM}({', '.join(parts) or '-'}){RESET}")
     log("종료하려면 Ctrl-C", DIM)
+
+    # 컨페티는 별도 프로세스라 실패해도 조용히 묻힌다. 버튼을 누른 뒤에
+    # 알게 되면 늦으므로 시작할 때 확인해둔다
+    if any(b.get("farewell") for b in buttons.values()):
+        for path, what in ((FAREWELL_PAGE, "farewell.html"), (CHROME_BIN, "크롬")):
+            if not os.path.exists(path):
+                log(f"{what}이(가) 없어 컨페티가 안 뜹니다 {DIM}{path}{RESET}", YELLOW)
     print()
 
     fd = None
@@ -207,7 +309,17 @@ def run():
                         continue
                     last_fire[key] = now
 
-                    launch(entry)
+                    fire(entry)
+
+                    # 쿨다운은 '작업이 끝난 시점'부터 다시 센다. 앱을 여는 데
+                    # 1초 넘게 걸리는 모드에서는 도장을 시작할 때 찍는 것만으로
+                    # 부족했다 — 그 사이 들어온 신호가 쿨다운을 지나 통과했다
+                    last_fire[key] = time.monotonic()
+
+                    # 여는 동안 쌓인 입력은 버린다. 조급해서 또 눌렀거나
+                    # 접점이 튄 것이지, 다음 모드를 요청한 게 아니다
+                    termios.tcflush(fd, termios.TCIFLUSH)
+                    buf = b""
 
                 elif line == "READY":
                     log("보드 준비 완료", GREEN)

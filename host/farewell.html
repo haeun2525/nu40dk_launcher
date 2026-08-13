@@ -1,0 +1,144 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>farewell</title>
+<!--
+  퇴근 버튼 화면. launcher.py가 크롬 앱 모드(--app)로 전체화면에 띄운다.
+  앱 모드라 탭도 주소창도 없고, 다 끝나면 스스로 닫힌다.
+
+  tkinter로 먼저 만들었다가 버렸다. 이 맥의 Tk는 창을 만들고도 캔버스를
+  그리지 못해 흰 화면만 남았다 (root.update()에서 멈춤).
+
+  글귀는 ?msg=... 로 받는다. 혼자 보려면 파일을 그냥 브라우저로 열면 된다.
+-->
+<style>
+  :root { --bg: #0d0d14; }
+  html, body { margin: 0; height: 100%; background: var(--bg); overflow: hidden; }
+  canvas { display: block; width: 100vw; height: 100vh; }
+
+  .center {
+    position: fixed; inset: 0;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    font-family: "Apple SD Gothic Neo", -apple-system, sans-serif;
+    text-align: center; pointer-events: none;
+  }
+  /* 컨페티가 글자 뒤로도 지나가야 앞뒤가 있는 화면이 된다 */
+  .center { z-index: 2; }
+  canvas { position: fixed; inset: 0; z-index: 1; }
+
+  h1 {
+    margin: 0; font-size: 7.5vw; font-weight: 800; color: #fff;
+    letter-spacing: -0.02em;
+    animation: rise 700ms cubic-bezier(.2,.9,.25,1) both;
+  }
+  p {
+    margin: 2.2vh 0 0; font-size: 2.2vw; color: #9aa0b5;
+    animation: rise 700ms cubic-bezier(.2,.9,.25,1) 180ms both;
+  }
+  @keyframes rise {
+    from { opacity: 0; transform: translateY(28px) scale(.94); }
+    to   { opacity: 1; transform: none; }
+  }
+
+  /* 마지막에 화면 전체를 어둠으로 덮으며 끝낸다 */
+  #fade {
+    position: fixed; inset: 0; z-index: 3; background: var(--bg);
+    opacity: 0; pointer-events: none; transition: opacity 900ms ease-in;
+  }
+  #fade.on { opacity: 1; }
+</style>
+
+<canvas id="c"></canvas>
+<div class="center">
+  <h1 id="msg">잘가요~</h1>
+  <p id="sub">오늘도 수고했어요</p>
+</div>
+<div id="fade"></div>
+
+<script>
+  const DURATION   = 4600;   // 전체 길이
+  const FADE_MS    = 900;    // 마지막 암전
+  const SPAWN_MS   = 1400;   // 이 동안 계속 뿌린다
+  const SPAWN_RATE = 6;      // 프레임당 조각 수
+  const MAX_PIECES = 520;
+  const COLORS = ["#ff5a7a","#ffd166","#06d6a0","#5aa9ff","#c77dff","#ff9f68","#ffffff"];
+
+  const params = new URLSearchParams(location.search);
+  if (params.get("msg")) document.getElementById("msg").textContent = params.get("msg");
+  if (params.get("sub")) document.getElementById("sub").textContent = params.get("sub");
+
+  const canvas = document.getElementById("c");
+  const ctx = canvas.getContext("2d");
+  let W, H, dpr;
+
+  function resize() {
+    dpr = window.devicePixelRatio || 1;
+    W = canvas.width  = innerWidth  * dpr;
+    H = canvas.height = innerHeight * dpr;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  }
+  resize();
+  addEventListener("resize", resize);
+
+  const rand = (a, b) => a + Math.random() * (b - a);
+
+  class Piece {
+    constructor() {
+      this.x = rand(-40, innerWidth + 40);
+      this.y = rand(-innerHeight * 0.5, -20);
+      this.vx = rand(-1.1, 1.1);
+      this.vy = rand(2.2, 6.5);
+      // 큼직해야 영상에서 보인다. 잘게 뿌리면 먼지처럼 찍힌다
+      this.w = rand(13, 27);
+      this.h = rand(17, 36);
+      this.spin = rand(0.08, 0.22);
+      this.phase = rand(0, Math.PI * 2);
+      this.sway = rand(0.4, 1.4);
+      this.color = COLORS[(Math.random() * COLORS.length) | 0];
+    }
+    step() {
+      this.phase += this.spin;
+      this.vy += 0.045;                       // 중력
+      this.x += this.vx + Math.sin(this.phase) * this.sway;
+      this.y += this.vy;
+    }
+    draw() {
+      // 폭을 접었다 펴서 회전을 흉내낸다
+      const w = this.w * Math.abs(Math.cos(this.phase));
+      ctx.fillStyle = this.color;
+      ctx.fillRect(this.x - w / 2, this.y - this.h / 2, w, this.h);
+    }
+  }
+
+  const pieces = [];
+  const start = performance.now();
+
+  function frame(now) {
+    const t = now - start;
+    ctx.clearRect(0, 0, innerWidth, innerHeight);
+
+    if (t < SPAWN_MS && pieces.length < MAX_PIECES) {
+      for (let i = 0; i < SPAWN_RATE; i++) pieces.push(new Piece());
+    }
+
+    for (let i = pieces.length - 1; i >= 0; i--) {
+      const p = pieces[i];
+      p.step();
+      if (p.y - p.h > innerHeight) { pieces.splice(i, 1); continue; }
+      p.draw();
+    }
+
+    if (t < DURATION) requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+
+  setTimeout(() => document.getElementById("fade").classList.add("on"),
+             DURATION - FADE_MS);
+
+  // 앱 모드 창은 스스로 닫을 수 있다. 퇴근인데 창이 남아 있으면 앞뒤가 안 맞는다
+  setTimeout(() => window.close(), DURATION + 250);
+
+  // 촬영 중 마음이 바뀌면 즉시 끌 수 있어야 한다
+  addEventListener("keydown", (e) => { if (e.key === "Escape") window.close(); });
+  addEventListener("click", () => window.close());
+</script>

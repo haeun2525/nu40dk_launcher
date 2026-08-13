@@ -1,10 +1,41 @@
 {
-  "_설명": "버튼 번호 → 열 것. app은 /Applications 안의 앱 이름, url은 기본 브라우저로 엽니다. 둘 다 있으면 app이 이깁니다.",
+  "_설명": "버튼 번호 → 할 일. open은 순서대로 여는 목록(app = /Applications 앱 이름, url = 기본 브라우저), close는 닫을 앱 이름, farewell은 컨페티 화면에 띄울 글귀.",
+  "_크롬도_닫고_싶으면": "퇴근의 close 목록에 \"Google Chrome\"을 넣으면 됩니다. 열어둔 탭까지 같이 닫히니 기본값에서는 빼뒀습니다.",
   "port": null,
   "buttons": {
-    "1": { "name": "클로드",     "app": "Claude" },
-    "2": { "name": "노션",       "app": "Notion" },
-    "3": { "name": "인스타그램", "url": "https://www.instagram.com" },
-    "4": { "name": "팀즈",       "app": "Microsoft Teams" }
+    "1": {
+      "name": "출근",
+      "open": [
+        { "app": "Microsoft Teams" },
+        { "app": "Notion" }
+      ]
+    },
+    "2": {
+      "name": "코딩 모드",
+      "open": [
+        { "app": "Terminal" },
+        { "app": "Claude" },
+        { "app": "Arduino IDE" }
+      ]
+    },
+    "3": {
+      "name": "디자인 모드",
+      "open": [
+        { "app": "Figma" },
+        { "url": "https://www.pinterest.co.kr" },
+        { "url": "https://www.instagram.com" }
+      ]
+    },
+    "4": {
+      "name": "퇴근",
+      "close": [
+        "Microsoft Teams",
+        "Notion",
+        "Claude",
+        "Arduino IDE",
+        "Figma"
+      ],
+      "farewell": "잘가요~"
+    }
   }
 }
