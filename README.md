@@ -22,7 +22,8 @@ nu40dk_launcher.ino    보드 펌웨어 (버튼 → 시리얼)
 host/
   launcher.py          Mac 프로그램 (시리얼 → 앱 열기·닫기)
   farewell.html        퇴근 컨페티 화면
-  config.json          모드 정의. 바꾸려면 여기만 고친다
+  config.json          모드 4개 (기본). 바꾸려면 여기만 고친다
+  config.apps.json     버튼 하나에 앱 하나. 인자로 골라 쓴다
   run.command          더블클릭 실행
 ```
 
@@ -56,6 +57,16 @@ caffeinate -i python3 ~/Documents/Arduino/nu40dk_launcher/host/launcher.py
 꺼지면 그 순간부터 버튼이 죽는다. Ctrl-C 하면 런처와 잠들기 방지가 같이 풀린다.
 
 잠깐 쓸 거면 `host/run.command` 더블클릭도 된다 (caffeinate는 안 붙는다).
+
+**설정을 골라서 띄울 수도 있다.** 인자로 파일 이름을 주면 그걸 읽는다.
+
+```sh
+python3 host/launcher.py                    # config.json — 모드 4개 (기본)
+python3 host/launcher.py config.apps.json   # 버튼 하나에 앱 하나
+```
+
+어느 설정으로 떴는지 시작 줄에 파일 이름이 찍힌다. **두 개를 동시에 띄우지 말 것** —
+같은 포트를 둘이 나눠 읽어서 버튼이 한쪽에만 들어간다.
 
 보드가 안 꽂혀 있어도 그냥 뜬다. 꽂으면 알아서 붙고, 뽑았다 꽂아도 알아서 다시 붙는다.
 포트 이름은 꽂을 때마다 바뀌지만 매번 새로 찾으므로 신경 쓸 것 없다.

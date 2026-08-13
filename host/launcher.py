@@ -62,8 +62,9 @@ def log(msg, color=""):
     print(f"{DIM}{stamp}{RESET}  {color}{msg}{RESET}", flush=True)
 
 
-def load_config():
-    with open(CONFIG_PATH, encoding="utf-8") as f:
+def load_config(path=None):
+    path = path or CONFIG_PATH
+    with open(path, encoding="utf-8") as f:
         cfg = json.load(f)
 
     buttons = {}
@@ -306,11 +307,14 @@ def fire(entry):
         log(f"'{name}'에 할 일이 없습니다 — config.json 확인", YELLOW)
 
 
-def run():
-    port_cfg, buttons = load_config()
+def run(config_path=None):
+    config_path = config_path or CONFIG_PATH
+    port_cfg, buttons = load_config(config_path)
 
     print()
-    log("NU40DK Launcher 시작", CYAN)
+    # 어느 설정으로 떴는지 반드시 보여준다. 설정을 여러 개 두면
+    # "왜 안 바뀌지"의 절반은 다른 파일을 보고 있어서 생긴다
+    log(f"NU40DK Launcher 시작 {DIM}({os.path.basename(config_path)}){RESET}", CYAN)
     for key in sorted(buttons):
         entry = buttons[key]
         parts = [item.get("app") or item.get("url") or "?" for item in targets_of(entry)]
@@ -441,4 +445,12 @@ def run():
 
 
 if __name__ == "__main__":
-    sys.exit(run())
+    # 설정 파일을 인자로 받는다. 없으면 config.json.
+    # 파일 이름만 주면 이 폴더에서 찾는다 — 매번 전체 경로를 치지 않게
+    chosen = sys.argv[1] if len(sys.argv) > 1 else None
+    if chosen and not os.path.isabs(chosen):
+        chosen = os.path.join(HERE, chosen)
+    if chosen and not os.path.exists(chosen):
+        log(f"설정 파일이 없습니다: {chosen}", YELLOW)
+        sys.exit(1)
+    sys.exit(run(chosen))

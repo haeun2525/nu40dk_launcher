@@ -1,0 +1,11 @@
+{
+  "_설명": "버튼 하나에 앱 하나. 모드로 묶지 않은 단순 구성이다. 모드 구성은 config.json에 있다.",
+  "_쓰는_법": "python3 launcher.py config.apps.json",
+  "port": null,
+  "buttons": {
+    "1": { "name": "인스타그램", "url": "https://www.instagram.com" },
+    "2": { "name": "터미널",     "app": "Terminal", "new": true, "command": "" },
+    "3": { "name": "팀즈",       "app": "Microsoft Teams" },
+    "4": { "name": "핀터레스트", "url": "https://www.pinterest.co.kr" }
+  }
+}
