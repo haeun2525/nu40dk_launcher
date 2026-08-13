@@ -1,5 +1,7 @@
 {
   "_설명": "버튼 번호 → 할 일. open은 순서대로 여는 목록(app = /Applications 앱 이름, url = 기본 브라우저), close는 닫을 앱 이름, farewell은 컨페티 화면에 띄울 글귀.",
+  "_new_옵션": "이미 떠 있는 앱이어도 새 창을 띄운다(촬영용). 터미널은 돌아가던 창을 안 건드리고 새 창만 열며, command를 주면 그 창에서 실행한다. 그 밖의 앱은 ⌘N을 보내므로 손쉬운 사용 권한이 필요하다. 노션·피그마·팀즈에는 넣지 말 것 — ⌘N이 새 문서를 만들어 버린다.",
+  "_file_옵션": "그 앱으로 이 파일을 연다. 권한 없이도 새 창이 뜨고 화면에 내용까지 보인다.",
   "_크롬도_닫고_싶으면": "퇴근의 close 목록에 \"Google Chrome\"을 넣으면 됩니다. 열어둔 탭까지 같이 닫히니 기본값에서는 빼뒀습니다.",
   "port": null,
   "buttons": {
@@ -13,9 +15,9 @@
     "2": {
       "name": "코딩 모드",
       "open": [
-        { "app": "Terminal" },
-        { "app": "Claude" },
-        { "app": "Arduino IDE" }
+        { "app": "Terminal", "new": true, "command": "" },
+        { "app": "Claude", "new": true },
+        { "app": "Arduino IDE", "file": "~/Documents/Arduino/nu40dk_launcher/nu40dk_launcher.ino" }
       ]
     },
     "3": {

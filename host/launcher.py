@@ -44,6 +44,9 @@ STAGGER_SEC = 0.35
 # 앱 종료를 기다려주는 한계. 넘어가면 포기하고 다음 앱으로 간다
 QUIT_TIMEOUT_SEC = 6.0
 
+# 그 밖의 AppleScript 한 줄이 응답을 기다리는 한계
+OSA_TIMEOUT_SEC = 8.0
+
 BTN_RE = re.compile(r"^BTN([1-4])$")
 
 DIM    = "\033[2m"
@@ -122,9 +125,85 @@ def targets_of(entry):
     return []
 
 
+def osa(script, timeout=OSA_TIMEOUT_SEC):
+    """AppleScript 한 토막 실행."""
+    return subprocess.run(["osascript", "-e", script],
+                          capture_output=True, text=True, timeout=timeout)
+
+
+def applescript_str(text):
+    """AppleScript 문자열 리터럴 안에 넣을 수 있게 감싼다."""
+    return '"' + text.replace("\\", "\\\\").replace('"', '\\"') + '"'
+
+
+def app_is_running(name):
+    try:
+        result = osa(f'application "{name}" is running')
+    except subprocess.TimeoutExpired:
+        # 답이 없으면 안 떠 있다고 보고 평범하게 연다. 여기서 멈추면
+        # 버튼 하나에 런처 전체가 굳는다
+        return False
+    return (result.stdout or "").strip() == "true"
+
+
+def open_new_window(item):
+    """이미 떠 있는 앱에 '새 창'을 띄운다.
+
+    촬영용이다. open -a는 이미 떠 있는 앱을 앞으로 끌어올 뿐이라
+    화면에서는 아무 일도 안 일어난 것처럼 보인다.
+    """
+    app = item["app"]
+
+    # 안 떠 있으면 그냥 열면 된다. 어차피 창이 새로 뜬다
+    if not app_is_running(app):
+        return False
+
+    if app == "Terminal":
+        # 터미널은 ⌘N 없이도 새 창을 만들 수 있다. 돌아가던 창은 안 건드린다.
+        # command를 주면 그 창에서 바로 실행된다 — 카메라 앞에서 좋다
+        script = ('tell application "Terminal"\n'
+                  '  activate\n'
+                  f'  do script {applescript_str(item.get("command", ""))}\n'
+                  'end tell')
+    else:
+        # 나머지는 앱을 앞으로 불러낸 뒤 ⌘N을 보낸다.
+        # delay는 앱이 실제로 맨 앞에 올 때까지 기다리는 시간이다
+        script = (f'tell application "{app}" to activate\n'
+                  'delay 0.4\n'
+                  'tell application "System Events" to keystroke "n" using command down')
+
+    try:
+        result = osa(script)
+    except subprocess.TimeoutExpired:
+        log(f"  ↳ '{app}' 새 창 시간 초과", YELLOW)
+        return True
+
+    if result.returncode == 0:
+        log(f"  ↳ {app} 새 창", GREEN)
+    else:
+        detail = (result.stderr or "").strip()[:100]
+        log(f"  ↳ '{app}' 새 창 실패 — {detail}", YELLOW)
+        if "1002" in detail or "assistive" in detail.lower():
+            # ⌘N은 사람 대신 키를 눌러주는 것이라 손쉬운 사용 권한이 필요하다.
+            # 권한은 런처를 실행한 앱(보통 터미널)에 준다
+            log("     시스템 설정 → 개인정보 보호와 보안 → 손쉬운 사용에서 "
+                "터미널을 켜주세요", YELLOW)
+            log("     권한 없이 새 창을 원하면 config.json에서 new 대신 "
+                "file로 파일을 지정하세요", YELLOW)
+    return True
+
+
 def open_item(item):
     """앱 하나 또는 URL 하나. 이미 떠 있는 앱이면 앞으로 끌어온다."""
-    if item.get("app"):
+    if item.get("app") and item.get("new") and open_new_window(item):
+        return
+
+    if item.get("app") and item.get("file"):
+        # 파일을 지정하면 그 앱이 그 파일로 새 창을 연다. ⌘N과 달리
+        # 손쉬운 사용 권한이 필요 없고, 화면에 내용까지 보인다
+        path = os.path.expanduser(item["file"])
+        cmd, label = ["open", "-a", item["app"], path], f'{item["app"]} ← {os.path.basename(path)}'
+    elif item.get("app"):
         cmd, label = ["open", "-a", item["app"]], item["app"]
     elif item.get("url"):
         cmd, label = ["open", item["url"]], item["url"]
