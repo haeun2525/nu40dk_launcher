@@ -220,28 +220,44 @@ def open_item(item):
 
 
 def close_app(name):
-    """앱을 정상 종료시킨다."""
+    """앱을 정상 종료시킨다. 정말 죽었는지 확인하고 사실대로 알린다."""
     # is running을 먼저 보는 이유: quit만 보내면 안 떠 있던 앱이 오히려 실행된다.
-    # 퇴근 눌렀는데 앱이 켜지는 건 제일 보기 싫은 그림이다
-    script = f'if application "{name}" is running then quit application "{name}"'
+    # 퇴근 눌렀는데 앱이 켜지는 건 제일 보기 싫은 그림이다.
+    #
+    # 그리고 quit이 성공했다고 앱이 죽은 건 아니다. 저장 확인 창이 뜨면
+    # 그대로 살아 있다. 실제로 사라졌는지 보고 나서 말해야 로그를 믿을 수 있다
+    script = (f'if application "{name}" is running then\n'
+              f'  quit application "{name}"\n'
+              '  repeat 12 times\n'
+              f'    if not (application "{name}" is running) then return "quit"\n'
+              '    delay 0.15\n'
+              '  end repeat\n'
+              '  return "still"\n'
+              'else\n'
+              '  return "absent"\n'
+              'end if')
     try:
         result = subprocess.run(["osascript", "-e", script],
                                 capture_output=True, text=True,
                                 timeout=QUIT_TIMEOUT_SEC)
     except subprocess.TimeoutExpired:
-        # 저장 안 한 창이 있으면 앱이 물어보느라 안 죽는다. 여기서 계속 기다리면
-        # 런처 전체가 멈추므로 포기하고 넘어간다
-        log(f"  ↳ '{name}' 안 닫힘 — 저장할지 묻고 있는 것 같습니다", YELLOW)
+        log(f"  ↳ '{name}' 응답 없음 — 넘어갑니다", YELLOW)
         return
 
-    if result.returncode == 0:
-        log(f"  ↳ {name} 닫힘", DIM)
+    verdict = (result.stdout or "").strip()
+    if verdict == "quit":
+        log(f"  ↳ {name} 닫음", DIM)
+    elif verdict == "absent":
+        log(f"  ↳ {name} 이미 꺼져 있었음", DIM)
+    elif verdict == "still":
+        # 저장 안 한 창이 있으면 앱이 물어보느라 안 죽는다
+        log(f"  ↳ '{name}' 안 닫힘 — 저장할지 묻고 있는 것 같습니다", YELLOW)
     else:
         detail = (result.stderr or "").strip()[:80] or f"종료코드 {result.returncode}"
         log(f"  ↳ '{name}' 못 닫음 — {detail}", YELLOW)
 
 
-def show_farewell(message):
+def show_farewell(message, sub=None):
     """컨페티 화면을 크롬 앱 모드 창으로 띄운다."""
     # --app은 탭도 주소창도 없는 창을 연다. 페이지가 끝나면 스스로 닫히므로
     # 퇴근했는데 창이 남는 일이 없다.
@@ -256,6 +272,8 @@ def show_farewell(message):
 
     url = ("file://" + urllib.parse.quote(FAREWELL_PAGE)
            + "?msg=" + urllib.parse.quote(message))
+    if sub is not None:
+        url += "&sub=" + urllib.parse.quote(sub)
     try:
         subprocess.Popen([CHROME_BIN, f"--app={url}", "--start-fullscreen"],
                          stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
@@ -282,7 +300,7 @@ def fire(entry):
 
     message = entry.get("farewell")
     if message:
-        show_farewell(message)
+        show_farewell(message, entry.get("farewell_sub"))
 
     if not items and not entry.get("close") and not message:
         log(f"'{name}'에 할 일이 없습니다 — config.json 확인", YELLOW)
