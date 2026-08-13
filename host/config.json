@@ -11,6 +11,7 @@
       "name": "출근",
       "open": [
         { "app": "Microsoft Teams" },
+        { "app": "Microsoft Outlook" },
         { "app": "Notion" }
       ]
     },
@@ -34,6 +35,7 @@
       "name": "퇴근",
       "close": [
         "Microsoft Teams",
+        "Microsoft Outlook",
         "Notion",
         "Claude",
         "Arduino IDE",
