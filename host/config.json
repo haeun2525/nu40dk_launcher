@@ -1,49 +1,11 @@
 {
-  "_설명": "버튼 번호 → 할 일. open은 순서대로 여는 목록(app = /Applications 앱 이름, url = 기본 브라우저), close는 닫을 앱 이름, farewell은 컨페티 화면에 띄울 글귀.",
-  "_new_옵션": "이미 떠 있는 앱이어도 새 창을 띄운다(촬영용). 터미널은 돌아가던 창을 안 건드리고 새 창만 열며, command를 주면 그 창에서 실행한다. 그 밖의 앱은 ⌘N을 보내므로 손쉬운 사용 권한이 필요하다. 노션·피그마·팀즈에는 넣지 말 것 — ⌘N이 새 문서를 만들어 버린다.",
-  "_file_옵션": "그 앱으로 이 파일을 연다. 권한 없이도 새 창이 뜨고 화면에 내용까지 보인다.",
-  "_컨페티_문구": "farewell이 큰 글씨, farewell_sub가 그 아래 작은 글씨. farewell_sub를 빼면 '오늘도 수고했어요'가 들어간다.",
-  "_크롬_주의": "퇴근이 크롬을 닫습니다. 열어둔 탭이 같이 닫히니 부담되면 close 목록에서 \"Google Chrome\"을 빼세요. 컨페티도 크롬으로 띄우므로 닫은 직후 컨페티 창 하나로 다시 뜹니다.",
-  "_터미널은_넣지_말_것": "런처가 터미널에서 돌고 있으면 퇴근이 런처 자신을 죽입니다.",
+  "_설명": "버튼 하나에 앱 하나. 인자 없이 띄우면 이 설정이 쓰인다.",
+  "_모드_구성도_있다": "출근/코딩/디자인/퇴근으로 묶은 구성은 config.modes.json에 있다. python3 launcher.py config.modes.json",
   "port": null,
   "buttons": {
-    "1": {
-      "name": "출근",
-      "open": [
-        { "app": "Microsoft Teams" },
-        { "app": "Microsoft Outlook" },
-        { "app": "Notion" }
-      ]
-    },
-    "2": {
-      "name": "코딩 모드",
-      "open": [
-        { "app": "Terminal", "new": true, "command": "" },
-        { "app": "Claude", "new": true },
-        { "app": "Arduino IDE", "file": "~/Documents/Arduino/nu40dk_launcher/nu40dk_launcher.ino" }
-      ]
-    },
-    "3": {
-      "name": "디자인 모드",
-      "open": [
-        { "app": "Figma" },
-        { "url": "https://www.pinterest.co.kr" },
-        { "url": "https://www.instagram.com" }
-      ]
-    },
-    "4": {
-      "name": "퇴근",
-      "close": [
-        "Microsoft Teams",
-        "Microsoft Outlook",
-        "Notion",
-        "Claude",
-        "Arduino IDE",
-        "Figma",
-        "Google Chrome"
-      ],
-      "farewell": "얼른 집에 가세요~",
-      "farewell_sub": "오늘도 수고했어요"
-    }
+    "1": { "name": "인스타그램", "url": "https://www.instagram.com" },
+    "2": { "name": "터미널",     "app": "Terminal", "new": true, "command": "" },
+    "3": { "name": "팀즈",       "app": "Microsoft Teams" },
+    "4": { "name": "핀터레스트", "url": "https://www.pinterest.co.kr" }
   }
 }
