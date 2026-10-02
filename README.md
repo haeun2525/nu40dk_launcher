@@ -1,5 +1,22 @@
 # NU40DK Launcher
 
+## Quick start (English)
+
+Turn the NU40 DK's four buttons into Mac launch keys. The board only reports which button was pressed (`BTN1`–`BTN4` over USB serial); `host/launcher.py` on the Mac decides what to open, so you never re-upload the board to change an app. macOS only.
+
+1. Put this folder at `~/Documents/Arduino/nu40dk_launcher` and upload `nu40dk_launcher.ino` from Arduino IDE (board: NU40DK nRF52840). Close the Serial Monitor afterwards.
+2. Run the launcher (Python 3 standard library only, nothing to install):
+   ```sh
+   python3 ~/Documents/Arduino/nu40dk_launcher/host/launcher.py                     # one app per button (config.json)
+   python3 ~/Documents/Arduino/nu40dk_launcher/host/launcher.py config.modes.json   # Start work / Coding / Design / Clock out modes
+   ```
+   Or double-click `host/run.command`. You should see `Board connected /dev/cu.usbmodem…`.
+3. Edit `host/config.json` (`"url"` for a website, `"app"` for an app name from /Applications), then restart the launcher. Settings are read only at startup.
+
+Protocol: the board sends `READY` on boot and `BTN1`–`BTN4` once per press. Clock out shows a confetti screen in Chrome (`host/farewell.html`).
+
+---
+
 버튼 4개짜리 미니 보드. 하나 누르면 그게 뜬다.
 
 설정이 두 벌 있고, 띄울 때 고른다.
@@ -8,19 +25,19 @@
 
 | 버튼 | GPIO | 여는 것 |
 |------|------|---------|
-| 1 | 11 | 인스타그램 (웹) |
-| 2 | 12 | 터미널 (새 창) |
-| 3 | 24 | 팀즈 |
-| 4 | 25 | 핀터레스트 (웹) |
+| 1 | 11 | Instagram (웹) |
+| 2 | 12 | Terminal (새 창) |
+| 3 | 24 | Teams |
+| 4 | 25 | Pinterest (웹) |
 
 **`config.modes.json` — 작업 환경을 통째로**
 
 | 버튼 | 모드 | 하는 일 |
 |------|------|---------|
-| 1 | 출근 | 팀즈, 아웃룩, 노션 |
-| 2 | 코딩 모드 | 터미널(새 창), 클로드, 아두이노 IDE(스케치 열기) |
-| 3 | 디자인 모드 | 피그마, 핀터레스트(웹), 인스타그램(웹) |
-| 4 | 퇴근 | 위 앱들 + 크롬을 닫고 컨페티 + "얼른 집에 가세요~" |
+| 1 | Start work (출근) | 팀즈, 아웃룩, 노션 |
+| 2 | Coding mode | 터미널(새 창), 클로드, 아두이노 IDE(스케치 열기) |
+| 3 | Design mode | 피그마, 핀터레스트(웹), 인스타그램(웹) |
+| 4 | Clock out (퇴근) | 위 앱들 + 크롬을 닫고 컨페티 + "Go home already!" |
 
 모드를 만든 이유: 코딩을 시작할 때 실제로 필요한 건 클로드 하나가 아니라
 터미널·클로드·아두이노 세 개다. 하나씩 누르면 버튼이 모자란다.
@@ -90,7 +107,7 @@ python3 host/launcher.py config.modes.json   # 출근/코딩/디자인/퇴근 �
 
 ## 촬영 전 점검
 
-1. 위 명령으로 런처를 띄운다 — "보드 연결됨"이 찍히는지 본다
+1. 위 명령으로 런처를 띄운다 — "Board connected"가 찍히는지 본다
 2. **아두이노 시리얼 모니터는 닫는다.** 열려 있으면 버튼이 씹힌다
 3. 퇴근(4번)을 한 번 눌러본다 — macOS가 앱마다 "제어 허용"을 물으면 다 허용한다.
    이걸 미리 안 하면 촬영 때 컨페티 대신 권한 창이 뜬다
@@ -117,18 +134,18 @@ Together 보드로 되돌리려면 `~/Documents/Arduino/nu40dk_together`를 같�
 버튼 하나에 앱 하나면 이렇게 짧게 쓴다.
 
 ```json
-"1": { "name": "인스타그램", "url": "https://www.instagram.com" }
-"3": { "name": "팀즈", "app": "Microsoft Teams" }
+"1": { "name": "Instagram", "url": "https://www.instagram.com" }
+"3": { "name": "Teams", "app": "Microsoft Teams" }
 ```
 
 여러 개를 묶거나 닫으려면 `open`/`close`를 쓴다.
 
 ```json
 "2": {
-  "name": "회의 모드",
+  "name": "Meeting mode",
   "open": [ { "app": "Zoom" }, { "url": "https://notion.so" } ],
   "close": [ "Slack" ],
-  "farewell": "회의 시작!"
+  "farewell": "Meeting time!"
 }
 ```
 

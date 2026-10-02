@@ -1,16 +1,16 @@
 #!/usr/bin/env python3
 """
-NU40DK Launcher — 보드 버튼 4개로 Mac 앱 열기
+NU40DK Launcher — open Mac apps with the board's 4 buttons
 
-보드가 시리얼로 "BTN1" ~ "BTN4"를 뱉으면 config.json의 매핑대로 앱을 연다.
-보드가 없어도, 뽑았다 꽂아도, 프로그램은 계속 살아서 기다린다.
+When the board prints "BTN1" to "BTN4" over serial, this opens apps as mapped in config.json.
+With no board, or if you unplug and replug it, the program stays alive and keeps waiting.
 
-pyserial 없이 termios로 직접 포트를 연다. 이 맥에 pyserial이 없고,
-데모 하루 전에 pip이 막혀 있는 상황을 만들고 싶지 않아서다.
-USB CDC라 보드레이트는 사실 아무 값이나 무시되지만 관례대로 115200을 건다.
+Opens the port directly with termios instead of pyserial. This Mac has no pyserial,
+and I didn't want to end up with pip blocked the day before a demo.
+It's USB CDC, so the baud rate is actually ignored, but 115200 is set by convention.
 
-실행:  python3 ~/nu40-launcher/launcher.py
-종료:  Ctrl-C
+Run:   python3 ~/nu40-launcher/launcher.py
+Quit:  Ctrl-C
 """
 
 import glob
@@ -30,21 +30,21 @@ FAREWELL_PAGE = os.path.join(HERE, "farewell.html")
 
 CHROME_BIN = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
 
-# 같은 버튼이 이 시간 안에 다시 들어오면 무시한다. 펌웨어가 디바운스를 하지만
-# 손가락이 떨려 두 번 눌리는 것까지는 막지 못한다. 앱이 두 번 뜨는 것보다
-# 한 번 씹히는 게 낫다.
+# If the same button comes in again within this time, ignore it. The firmware debounces,
+# but it can't stop a shaky finger from pressing twice. Missing one press is
+# better than an app opening twice.
 COOLDOWN_SEC = 0.8
 
-# 보드를 못 찾거나 끊겼을 때 다시 찾아보는 간격
+# How often to look again when the board isn't found or got disconnected
 RECONNECT_SEC = 1.0
 
-# 한 모드에서 앱을 여러 개 열 때 사이 간격
+# Gap between apps when one mode opens several
 STAGGER_SEC = 0.35
 
-# 앱 종료를 기다려주는 한계. 넘어가면 포기하고 다음 앱으로 간다
+# How long to wait for an app to quit. After that, give up and move to the next app
 QUIT_TIMEOUT_SEC = 6.0
 
-# 그 밖의 AppleScript 한 줄이 응답을 기다리는 한계
+# How long any other one-line AppleScript may take to answer
 OSA_TIMEOUT_SEC = 8.0
 
 BTN_RE = re.compile(r"^BTN([1-4])$")
@@ -76,22 +76,22 @@ def load_config(path=None):
 
 
 def find_port(configured):
-    """설정에 포트가 박혀 있으면 그것만, 아니면 usbmodem을 훑는다."""
+    """If the config pins a port, use only that. Otherwise scan usbmodem ports."""
     if configured:
         return configured if os.path.exists(configured) else None
 
-    # 보드가 여러 개 꽂혀 있으면 이름순으로 첫 번째. config.json의 port로 고정할 수 있다
+    # With several boards plugged in, take the first by name. Pin one with "port" in config.json
     ports = sorted(glob.glob("/dev/cu.usbmodem*"))
     return ports[0] if ports else None
 
 
 def open_port(path):
-    """포트를 raw 모드로 연다. 실패하면 OSError가 그대로 올라간다."""
+    """Open the port in raw mode. On failure the OSError propagates as-is."""
     fd = os.open(path, os.O_RDWR | os.O_NOCTTY | os.O_NONBLOCK)
     try:
         iflag, oflag, cflag, lflag, ispeed, ospeed, cc = termios.tcgetattr(fd)
 
-        # 줄바꿈 변환, 에코, 시그널 해석을 전부 끈다. 들어온 바이트를 그대로 받는다
+        # Turn off newline translation, echo and signal handling. Take bytes exactly as they come
         iflag = 0
         oflag = 0
         lflag = 0
@@ -105,7 +105,7 @@ def open_port(path):
             fd, termios.TCSANOW,
             [iflag, oflag, cflag, lflag, ispeed, ospeed, cc],
         )
-        # 꽂아둔 사이 쌓인 묵은 출력은 버린다. 안 그러면 켜자마자 앱이 우르르 뜬다
+        # Drop stale output that piled up while plugged in. Otherwise a pile of apps opens at startup
         termios.tcflush(fd, termios.TCIFLUSH)
     except Exception:
         os.close(fd)
@@ -115,7 +115,7 @@ def open_port(path):
 
 
 def targets_of(entry):
-    """항목을 '열 것' 목록으로 편다. 예전의 단일 app/url 형식도 그대로 받는다."""
+    """Flatten an entry into a list of things to open. Also accepts the old single app/url form."""
     items = entry.get("open")
     if items is not None:
         return items
@@ -127,13 +127,13 @@ def targets_of(entry):
 
 
 def osa(script, timeout=OSA_TIMEOUT_SEC):
-    """AppleScript 한 토막 실행."""
+    """Run a snippet of AppleScript."""
     return subprocess.run(["osascript", "-e", script],
                           capture_output=True, text=True, timeout=timeout)
 
 
 def applescript_str(text):
-    """AppleScript 문자열 리터럴 안에 넣을 수 있게 감싼다."""
+    """Wrap text so it can go inside an AppleScript string literal."""
     return '"' + text.replace("\\", "\\\\").replace('"', '\\"') + '"'
 
 
@@ -141,34 +141,34 @@ def app_is_running(name):
     try:
         result = osa(f'application "{name}" is running')
     except subprocess.TimeoutExpired:
-        # 답이 없으면 안 떠 있다고 보고 평범하게 연다. 여기서 멈추면
-        # 버튼 하나에 런처 전체가 굳는다
+        # No answer: treat it as not running and open it normally. Stalling here
+        # would freeze the whole launcher on one button
         return False
     return (result.stdout or "").strip() == "true"
 
 
 def open_new_window(item):
-    """이미 떠 있는 앱에 '새 창'을 띄운다.
+    """Open a 'new window' in an app that's already running.
 
-    촬영용이다. open -a는 이미 떠 있는 앱을 앞으로 끌어올 뿐이라
-    화면에서는 아무 일도 안 일어난 것처럼 보인다.
+    This is for filming. open -a only brings a running app to the front,
+    so on screen it looks like nothing happened.
     """
     app = item["app"]
 
-    # 안 떠 있으면 그냥 열면 된다. 어차피 창이 새로 뜬다
+    # If it isn't running, just open it. A new window appears anyway
     if not app_is_running(app):
         return False
 
     if app == "Terminal":
-        # 터미널은 ⌘N 없이도 새 창을 만들 수 있다. 돌아가던 창은 안 건드린다.
-        # command를 주면 그 창에서 바로 실행된다 — 카메라 앞에서 좋다
+        # Terminal can make a new window without ⌘N. Windows already running are left alone.
+        # Give it a command and it runs in that window — nice on camera
         script = ('tell application "Terminal"\n'
                   '  activate\n'
                   f'  do script {applescript_str(item.get("command", ""))}\n'
                   'end tell')
     else:
-        # 나머지는 앱을 앞으로 불러낸 뒤 ⌘N을 보낸다.
-        # delay는 앱이 실제로 맨 앞에 올 때까지 기다리는 시간이다
+        # Everything else: bring the app to the front, then send ⌘N.
+        # The delay waits until the app is actually in front
         script = (f'tell application "{app}" to activate\n'
                   'delay 0.4\n'
                   'tell application "System Events" to keystroke "n" using command down')
@@ -176,32 +176,32 @@ def open_new_window(item):
     try:
         result = osa(script)
     except subprocess.TimeoutExpired:
-        log(f"  ↳ '{app}' 새 창 시간 초과", YELLOW)
+        log(f"  ↳ '{app}' new window timed out", YELLOW)
         return True
 
     if result.returncode == 0:
-        log(f"  ↳ {app} 새 창", GREEN)
+        log(f"  ↳ {app} new window", GREEN)
     else:
         detail = (result.stderr or "").strip()[:100]
-        log(f"  ↳ '{app}' 새 창 실패 — {detail}", YELLOW)
+        log(f"  ↳ '{app}' new window failed — {detail}", YELLOW)
         if "1002" in detail or "assistive" in detail.lower():
-            # ⌘N은 사람 대신 키를 눌러주는 것이라 손쉬운 사용 권한이 필요하다.
-            # 권한은 런처를 실행한 앱(보통 터미널)에 준다
-            log("     시스템 설정 → 개인정보 보호와 보안 → 손쉬운 사용에서 "
-                "터미널을 켜주세요", YELLOW)
-            log("     권한 없이 새 창을 원하면 config.json에서 new 대신 "
-                "file로 파일을 지정하세요", YELLOW)
+            # ⌘N presses a key on your behalf, so it needs Accessibility permission.
+            # Grant it to the app that runs the launcher (usually Terminal)
+            log("     Turn on Terminal in System Settings → Privacy & Security → "
+                "Accessibility", YELLOW)
+            log("     For a new window without that permission, use \"file\" "
+                "instead of \"new\" in config.json", YELLOW)
     return True
 
 
 def open_item(item):
-    """앱 하나 또는 URL 하나. 이미 떠 있는 앱이면 앞으로 끌어온다."""
+    """One app or one URL. If the app is already running, bring it to the front."""
     if item.get("app") and item.get("new") and open_new_window(item):
         return
 
     if item.get("app") and item.get("file"):
-        # 파일을 지정하면 그 앱이 그 파일로 새 창을 연다. ⌘N과 달리
-        # 손쉬운 사용 권한이 필요 없고, 화면에 내용까지 보인다
+        # With a file, the app opens a new window on that file. Unlike ⌘N
+        # it needs no Accessibility permission, and the content shows on screen
         path = os.path.expanduser(item["file"])
         cmd, label = ["open", "-a", item["app"], path], f'{item["app"]} ← {os.path.basename(path)}'
     elif item.get("app"):
@@ -209,24 +209,24 @@ def open_item(item):
     elif item.get("url"):
         cmd, label = ["open", item["url"]], item["url"]
     else:
-        log(f"  ↳ 열 대상이 비었습니다: {item}", YELLOW)
+        log(f"  ↳ Nothing to open: {item}", YELLOW)
         return
 
     result = subprocess.run(cmd, capture_output=True, text=True)
     if result.returncode == 0:
-        log(f"  ↳ {label} 열림", GREEN)
+        log(f"  ↳ Opened {label}", GREEN)
     else:
-        detail = (result.stderr or "").strip() or f"open 종료코드 {result.returncode}"
-        log(f"  ↳ '{label}' 못 엶 — {detail}", YELLOW)
+        detail = (result.stderr or "").strip() or f"open exit code {result.returncode}"
+        log(f"  ↳ Couldn't open '{label}' — {detail}", YELLOW)
 
 
 def close_app(name):
-    """앱을 정상 종료시킨다. 정말 죽었는지 확인하고 사실대로 알린다."""
-    # is running을 먼저 보는 이유: quit만 보내면 안 떠 있던 앱이 오히려 실행된다.
-    # 퇴근 눌렀는데 앱이 켜지는 건 제일 보기 싫은 그림이다.
+    """Quit an app normally. Check that it really quit and report honestly."""
+    # Why check "is running" first: sending quit alone launches an app that wasn't running.
+    # An app starting up when you press Clock out is the worst look.
     #
-    # 그리고 quit이 성공했다고 앱이 죽은 건 아니다. 저장 확인 창이 뜨면
-    # 그대로 살아 있다. 실제로 사라졌는지 보고 나서 말해야 로그를 믿을 수 있다
+    # Also, a successful quit doesn't mean the app is gone. If a save dialog
+    # appears, it stays alive. Only report after checking it really disappeared, so the log can be trusted
     script = (f'if application "{name}" is running then\n'
               f'  quit application "{name}"\n'
               '  repeat 12 times\n'
@@ -242,33 +242,33 @@ def close_app(name):
                                 capture_output=True, text=True,
                                 timeout=QUIT_TIMEOUT_SEC)
     except subprocess.TimeoutExpired:
-        log(f"  ↳ '{name}' 응답 없음 — 넘어갑니다", YELLOW)
+        log(f"  ↳ '{name}' not responding — skipping", YELLOW)
         return
 
     verdict = (result.stdout or "").strip()
     if verdict == "quit":
-        log(f"  ↳ {name} 닫음", DIM)
+        log(f"  ↳ Closed {name}", DIM)
     elif verdict == "absent":
-        log(f"  ↳ {name} 이미 꺼져 있었음", DIM)
+        log(f"  ↳ {name} wasn't running", DIM)
     elif verdict == "still":
-        # 저장 안 한 창이 있으면 앱이 물어보느라 안 죽는다
-        log(f"  ↳ '{name}' 안 닫힘 — 저장할지 묻고 있는 것 같습니다", YELLOW)
+        # With an unsaved window, the app stays alive while it asks
+        log(f"  ↳ '{name}' didn't quit — probably asking to save", YELLOW)
     else:
-        detail = (result.stderr or "").strip()[:80] or f"종료코드 {result.returncode}"
-        log(f"  ↳ '{name}' 못 닫음 — {detail}", YELLOW)
+        detail = (result.stderr or "").strip()[:80] or f"exit code {result.returncode}"
+        log(f"  ↳ Couldn't close '{name}' — {detail}", YELLOW)
 
 
 def show_farewell(message, sub=None):
-    """컨페티 화면을 크롬 앱 모드 창으로 띄운다."""
-    # --app은 탭도 주소창도 없는 창을 연다. 페이지가 끝나면 스스로 닫히므로
-    # 퇴근했는데 창이 남는 일이 없다.
-    # tkinter로 먼저 만들었다가 버렸다 — 이 맥의 Tk는 캔버스를 못 그리고
-    # 흰 화면만 남겼다 (root.update()에서 멈춤)
+    """Show the confetti screen in a Chrome app-mode window."""
+    # --app opens a window with no tabs and no address bar. The page closes itself
+    # when done, so no window is left behind after Clock out.
+    # It was first built with tkinter and dropped — this Mac's Tk couldn't draw the canvas
+    # and left only a white screen (stuck in root.update())
     if not os.path.exists(FAREWELL_PAGE):
-        log("farewell.html이 없습니다 — 컨페티 건너뜀", YELLOW)
+        log("farewell.html not found — skipping confetti", YELLOW)
         return
     if not os.path.exists(CHROME_BIN):
-        log("크롬을 못 찾아 컨페티를 건너뜁니다", YELLOW)
+        log("Chrome not found — skipping confetti", YELLOW)
         return
 
     url = ("file://" + urllib.parse.quote(FAREWELL_PAGE)
@@ -278,23 +278,23 @@ def show_farewell(message, sub=None):
     try:
         subprocess.Popen([CHROME_BIN, f"--app={url}", "--start-fullscreen"],
                          stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        log("  ↳ 컨페티", GREEN)
+        log("  ↳ Confetti", GREEN)
     except OSError as e:
-        log(f"  ↳ 컨페티 못 띄움 — {e}", YELLOW)
+        log(f"  ↳ Couldn't show confetti — {e}", YELLOW)
 
 
 def fire(entry):
-    """버튼 하나가 뜻하는 일을 전부 수행한다."""
+    """Do everything one button stands for."""
     name = entry.get("name", "?")
     log(f"{BOLD}{name}{RESET}", CYAN)
 
-    # 닫기가 먼저다. 퇴근에서 컨페티가 마지막에 혼자 남아야 그림이 산다
+    # Closing comes first. For Clock out, the confetti has to be left alone at the end
     for app in entry.get("close", []):
         close_app(app)
 
     items = targets_of(entry)
     for i, item in enumerate(items):
-        # 한꺼번에 열면 창들이 서로 앞으로 나오려고 싸우고, 화면에도 안 예쁘다
+        # Opened all at once, the windows fight to come to the front, and it looks messy
         if i:
             time.sleep(STAGGER_SEC)
         open_item(item)
@@ -304,7 +304,7 @@ def fire(entry):
         show_farewell(message, entry.get("farewell_sub"))
 
     if not items and not entry.get("close") and not message:
-        log(f"'{name}'에 할 일이 없습니다 — config.json 확인", YELLOW)
+        log(f"Nothing to do for '{name}' — check config.json", YELLOW)
 
 
 def run(config_path=None):
@@ -312,43 +312,43 @@ def run(config_path=None):
     port_cfg, buttons = load_config(config_path)
 
     print()
-    # 어느 설정으로 떴는지 반드시 보여준다. 설정을 여러 개 두면
-    # "왜 안 바뀌지"의 절반은 다른 파일을 보고 있어서 생긴다
-    log(f"NU40DK Launcher 시작 {DIM}({os.path.basename(config_path)}){RESET}", CYAN)
+    # Always show which config it started with. With several config files,
+    # half of "why didn't it change" is looking at the wrong file
+    log(f"NU40DK Launcher started {DIM}({os.path.basename(config_path)}){RESET}", CYAN)
     for key in sorted(buttons):
         entry = buttons[key]
         parts = [item.get("app") or item.get("url") or "?" for item in targets_of(entry)]
         if entry.get("close"):
-            parts.append(f"{len(entry['close'])}개 닫기")
+            parts.append(f"close {len(entry['close'])}")
         if entry.get("farewell"):
-            parts.append("컨페티")
-        log(f"  버튼 {key} → {entry.get('name', '?')} "
+            parts.append("confetti")
+        log(f"  Button {key} → {entry.get('name', '?')} "
             f"{DIM}({', '.join(parts) or '-'}){RESET}")
-    log("종료하려면 Ctrl-C", DIM)
+    log("Press Ctrl-C to quit", DIM)
 
-    # 컨페티는 별도 프로세스라 실패해도 조용히 묻힌다. 버튼을 누른 뒤에
-    # 알게 되면 늦으므로 시작할 때 확인해둔다
+    # Confetti runs as a separate process, so failures are silent. Finding out
+    # after pressing the button is too late, so check at startup
     if any(b.get("farewell") for b in buttons.values()):
-        for path, what in ((FAREWELL_PAGE, "farewell.html"), (CHROME_BIN, "크롬")):
+        for path, what in ((FAREWELL_PAGE, "farewell.html"), (CHROME_BIN, "Chrome")):
             if not os.path.exists(path):
-                log(f"{what}이(가) 없어 컨페티가 안 뜹니다 {DIM}{path}{RESET}", YELLOW)
+                log(f"{what} not found — confetti won't show {DIM}{path}{RESET}", YELLOW)
     print()
 
     fd = None
     path = None
     buf = b""
     last_fire = {}
-    warned_missing = False    # "보드 못 찾음"을 매초 찍지 않기 위한 빗장
-    warned_wrong_fw = False   # 다른 펌웨어 경고도 한 번만
+    warned_missing = False    # latch so "board not found" isn't printed every second
+    warned_wrong_fw = False   # warn about other firmware only once too
 
     try:
         while True:
-            # --- 연결 ---
+            # --- connect ---
             if fd is None:
                 path = find_port(port_cfg)
                 if path is None:
                     if not warned_missing:
-                        log("보드를 찾는 중… (USB 연결 확인)", YELLOW)
+                        log("Looking for the board… (check the USB cable)", YELLOW)
                         warned_missing = True
                     time.sleep(RECONNECT_SEC)
                     continue
@@ -357,8 +357,8 @@ def run(config_path=None):
                     fd = open_port(path)
                 except OSError as e:
                     if not warned_missing:
-                        log(f"{path} 못 엶 — {e.strerror}. "
-                            f"Arduino 시리얼 모니터가 켜져 있으면 닫아주세요", YELLOW)
+                        log(f"Couldn't open {path} — {e.strerror}. "
+                            f"Close the Arduino Serial Monitor if it's open", YELLOW)
                         warned_missing = True
                     time.sleep(RECONNECT_SEC)
                     continue
@@ -366,23 +366,23 @@ def run(config_path=None):
                 buf = b""
                 warned_missing = False
                 warned_wrong_fw = False
-                log(f"보드 연결됨 {DIM}{path}{RESET}", GREEN)
+                log(f"Board connected {DIM}{path}{RESET}", GREEN)
 
-            # --- 읽기 ---
+            # --- read ---
             try:
                 ready, _, _ = select.select([fd], [], [], 0.5)
                 if not ready:
-                    # 보드를 뽑으면 조용해지기만 할 뿐 에러가 안 날 수 있다.
-                    # 노드가 사라졌는지 직접 확인한다
+                    # Unplugging the board may just go quiet without an error.
+                    # Check directly whether the device node is gone
                     if not os.path.exists(path):
-                        raise OSError(f"{path} 사라짐")
+                        raise OSError(f"{path} disappeared")
                     continue
 
                 chunk = os.read(fd, 4096)
                 if not chunk:
-                    raise OSError(f"{path} 연결 끊김")
+                    raise OSError(f"{path} disconnected")
             except OSError as e:
-                log(f"보드 끊김 — 다시 찾는 중 {DIM}({e}){RESET}", YELLOW)
+                log(f"Board disconnected — searching again {DIM}({e}){RESET}", YELLOW)
                 os.close(fd)
                 fd = None
                 time.sleep(RECONNECT_SEC)
@@ -390,7 +390,7 @@ def run(config_path=None):
 
             buf += chunk
 
-            # --- 줄 단위 처리 ---
+            # --- handle line by line ---
             while b"\n" in buf:
                 raw, buf = buf.split(b"\n", 1)
                 line = raw.decode("utf-8", "replace").strip()
@@ -402,7 +402,7 @@ def run(config_path=None):
                     key = match.group(1)
                     entry = buttons.get(key)
                     if entry is None:
-                        log(f"버튼 {key}에 매핑이 없습니다", YELLOW)
+                        log(f"No mapping for button {key}", YELLOW)
                         continue
 
                     now = time.monotonic()
@@ -412,45 +412,45 @@ def run(config_path=None):
 
                     fire(entry)
 
-                    # 쿨다운은 '작업이 끝난 시점'부터 다시 센다. 앱을 여는 데
-                    # 1초 넘게 걸리는 모드에서는 도장을 시작할 때 찍는 것만으로
-                    # 부족했다 — 그 사이 들어온 신호가 쿨다운을 지나 통과했다
+                    # Restart the cooldown from when the work finished. In modes that take
+                    # over a second to open apps, stamping only at the start wasn't
+                    # enough — signals that arrived meanwhile slipped past the cooldown
                     last_fire[key] = time.monotonic()
 
-                    # 여는 동안 쌓인 입력은 버린다. 조급해서 또 눌렀거나
-                    # 접점이 튄 것이지, 다음 모드를 요청한 게 아니다
+                    # Drop input that piled up while opening. It's an impatient extra press
+                    # or contact bounce, not a request for the next mode
                     termios.tcflush(fd, termios.TCIFLUSH)
                     buf = b""
 
                 elif line == "READY":
-                    log("보드 준비 완료", GREEN)
+                    log("Board ready", GREEN)
 
                 elif not warned_wrong_fw:
-                    # 런처 말고 다른 펌웨어가 올라가 있으면 여기로 떨어진다.
-                    # 원인을 모른 채 버튼만 눌러보는 시간을 없애준다
-                    log(f"버튼 신호가 아닌 출력이 옵니다: {DIM}{line[:60]}{RESET}", YELLOW)
-                    log("nu40dk_launcher 펌웨어가 올라가 있는지 확인하세요", YELLOW)
+                    # Lands here when firmware other than the launcher is on the board.
+                    # Saves time spent pressing buttons without knowing why
+                    log(f"Got output that isn't a button signal: {DIM}{line[:60]}{RESET}", YELLOW)
+                    log("Check that the nu40dk_launcher firmware is uploaded", YELLOW)
                     warned_wrong_fw = True
 
-            # 줄바꿈 없이 쓰레기만 계속 들어오는 펌웨어를 만나도 메모리가 안 새게 한다
+            # Don't leak memory even if firmware keeps sending junk with no newline
             if len(buf) > 8192:
                 buf = buf[-1024:]
 
     except KeyboardInterrupt:
         print()
-        log("종료합니다", CYAN)
+        log("Quitting", CYAN)
     finally:
         if fd is not None:
             os.close(fd)
 
 
 if __name__ == "__main__":
-    # 설정 파일을 인자로 받는다. 없으면 config.json.
-    # 파일 이름만 주면 이 폴더에서 찾는다 — 매번 전체 경로를 치지 않게
+    # Takes the config file as an argument. Without one, config.json.
+    # A bare file name is looked up in this folder — no typing the full path every time
     chosen = sys.argv[1] if len(sys.argv) > 1 else None
     if chosen and not os.path.isabs(chosen):
         chosen = os.path.join(HERE, chosen)
     if chosen and not os.path.exists(chosen):
-        log(f"설정 파일이 없습니다: {chosen}", YELLOW)
+        log(f"Config file not found: {chosen}", YELLOW)
         sys.exit(1)
     sys.exit(run(chosen))

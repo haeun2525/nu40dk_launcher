@@ -1,11 +1,11 @@
 {
-  "_설명": "버튼 하나에 앱 하나. 인자 없이 띄우면 이 설정이 쓰인다.",
-  "_모드_구성도_있다": "출근/코딩/디자인/퇴근으로 묶은 구성은 config.modes.json에 있다. python3 launcher.py config.modes.json",
+  "_about": "One app per button. Used when you start the launcher with no argument.",
+  "_modes_setup_too": "A setup grouped into Start work / Coding / Design / Clock out modes lives in config.modes.json: python3 launcher.py config.modes.json",
   "port": null,
   "buttons": {
-    "1": { "name": "인스타그램", "url": "https://www.instagram.com" },
-    "2": { "name": "터미널",     "app": "Terminal", "new": true, "command": "" },
-    "3": { "name": "팀즈",       "app": "Microsoft Teams" },
-    "4": { "name": "핀터레스트", "url": "https://www.pinterest.co.kr" }
+    "1": { "name": "Instagram", "url": "https://www.instagram.com" },
+    "2": { "name": "Terminal",  "app": "Terminal", "new": true, "command": "" },
+    "3": { "name": "Teams",     "app": "Microsoft Teams" },
+    "4": { "name": "Pinterest", "url": "https://www.pinterest.co.kr" }
   }
 }

@@ -2,13 +2,14 @@
 <meta charset="utf-8">
 <title>farewell</title>
 <!--
-  퇴근 버튼 화면. launcher.py가 크롬 앱 모드(--app)로 전체화면에 띄운다.
-  앱 모드라 탭도 주소창도 없고, 다 끝나면 스스로 닫힌다.
+  Clock out screen. launcher.py shows it full screen in Chrome app mode (--app).
+  App mode has no tabs and no address bar, and the page closes itself when done.
 
-  tkinter로 먼저 만들었다가 버렸다. 이 맥의 Tk는 창을 만들고도 캔버스를
-  그리지 못해 흰 화면만 남았다 (root.update()에서 멈춤).
+  It was first built with tkinter and dropped. This Mac's Tk created the window but
+  couldn't draw the canvas, leaving only a white screen (stuck in root.update()).
 
-  글귀는 ?msg=... 로 받는다. 혼자 보려면 파일을 그냥 브라우저로 열면 된다.
+  The text comes in as ?msg=... (and ?sub=...). To preview it, just open the file in a browser.
+  Korean or any other text works too: the font stack includes Apple SD Gothic Neo.
 -->
 <style>
   :root { --bg: #0d0d14; }
@@ -19,10 +20,10 @@
     position: fixed; inset: 0;
     display: flex; flex-direction: column;
     align-items: center; justify-content: center;
-    font-family: "Apple SD Gothic Neo", -apple-system, sans-serif;
+    font-family: -apple-system, "Apple SD Gothic Neo", sans-serif;
     text-align: center; pointer-events: none;
   }
-  /* 컨페티가 글자 뒤로도 지나가야 앞뒤가 있는 화면이 된다 */
+  /* Confetti also passes behind the text, which gives the screen depth */
   .center { z-index: 2; }
   canvas { position: fixed; inset: 0; z-index: 1; }
 
@@ -40,7 +41,7 @@
     to   { opacity: 1; transform: none; }
   }
 
-  /* 마지막에 화면 전체를 어둠으로 덮으며 끝낸다 */
+  /* At the end, fade the whole screen to dark */
   #fade {
     position: fixed; inset: 0; z-index: 3; background: var(--bg);
     opacity: 0; pointer-events: none; transition: opacity 900ms ease-in;
@@ -50,16 +51,16 @@
 
 <canvas id="c"></canvas>
 <div class="center">
-  <h1 id="msg">잘가요~</h1>
-  <p id="sub">오늘도 수고했어요</p>
+  <h1 id="msg">See you!</h1>
+  <p id="sub">Great work today</p>
 </div>
 <div id="fade"></div>
 
 <script>
-  const DURATION   = 4600;   // 전체 길이
-  const FADE_MS    = 900;    // 마지막 암전
-  const SPAWN_MS   = 1400;   // 이 동안 계속 뿌린다
-  const SPAWN_RATE = 6;      // 프레임당 조각 수
+  const DURATION   = 4600;   // total length
+  const FADE_MS    = 900;    // final fade to dark
+  const SPAWN_MS   = 1400;   // keep spawning for this long
+  const SPAWN_RATE = 6;      // pieces per frame
   const MAX_PIECES = 520;
   const COLORS = ["#ff5a7a","#ffd166","#06d6a0","#5aa9ff","#c77dff","#ff9f68","#ffffff"];
 
@@ -88,7 +89,7 @@
       this.y = rand(-innerHeight * 0.5, -20);
       this.vx = rand(-1.1, 1.1);
       this.vy = rand(2.2, 6.5);
-      // 큼직해야 영상에서 보인다. 잘게 뿌리면 먼지처럼 찍힌다
+      // Big pieces show up on video. Small ones look like dust
       this.w = rand(13, 27);
       this.h = rand(17, 36);
       this.spin = rand(0.08, 0.22);
@@ -98,12 +99,12 @@
     }
     step() {
       this.phase += this.spin;
-      this.vy += 0.045;                       // 중력
+      this.vy += 0.045;                       // gravity
       this.x += this.vx + Math.sin(this.phase) * this.sway;
       this.y += this.vy;
     }
     draw() {
-      // 폭을 접었다 펴서 회전을 흉내낸다
+      // Squash and stretch the width to fake rotation
       const w = this.w * Math.abs(Math.cos(this.phase));
       ctx.fillStyle = this.color;
       ctx.fillRect(this.x - w / 2, this.y - this.h / 2, w, this.h);
@@ -135,10 +136,10 @@
   setTimeout(() => document.getElementById("fade").classList.add("on"),
              DURATION - FADE_MS);
 
-  // 앱 모드 창은 스스로 닫을 수 있다. 퇴근인데 창이 남아 있으면 앞뒤가 안 맞는다
+  // An app-mode window can close itself. A window left behind after Clock out makes no sense
   setTimeout(() => window.close(), DURATION + 250);
 
-  // 촬영 중 마음이 바뀌면 즉시 끌 수 있어야 한다
+  // If you change your mind while filming, you can close it right away
   addEventListener("keydown", (e) => { if (e.key === "Escape") window.close(); });
   addEventListener("click", () => window.close());
 </script>

@@ -1,61 +1,61 @@
 /*
- * NU40DK Launcher — 버튼 4개짜리 앱 런처
+ * NU40DK Launcher — 4-button app launcher
  *
- * 보드는 판단하지 않는다. 버튼이 눌렸다는 사실만 시리얼로 알린다.
- * 어떤 앱을 열지는 Mac 쪽 launcher.py의 config.json이 정한다.
- * 매핑을 보드에 넣으면 앱을 바꿀 때마다 보드를 다시 구워야 하므로,
- * "누가 눌렸나"까지만 보드의 책임으로 둔다.
+ * The board makes no decisions. It only reports over serial that a button was pressed.
+ * Which app to open is decided by config.json of launcher.py on the Mac side.
+ * Putting the mapping on the board would mean reflashing it every time an app changes,
+ * so the board is only responsible for "which button was pressed".
  *
- * 프로토콜 (한 줄에 하나, \n 종결)
- *   READY        부팅 완료. Mac이 이걸 보면 연결됐다고 판단한다
- *   BTN1 ~ BTN4  버튼이 눌린 순간 한 번만
+ * Protocol (one per line, terminated by \n)
+ *   READY        boot complete. The Mac treats seeing this as "connected"
+ *   BTN1 ~ BTN4  once, at the moment a button is pressed
  *
- * 눌린 순간(falling edge)에만 보낸다. 누르고 있는 동안 계속 보내면
- * Mac 쪽에서 앱이 수십 번 열린다. 뗄 때는 아무것도 보내지 않는다 —
- * 런처는 뗀 시점을 알 필요가 없다.
+ * Sent only at the press (falling edge). If it kept sending while held,
+ * the Mac side would open the app dozens of times. Nothing is sent on release —
+ * the launcher does not need to know when it was released.
  *
- * 업로드:
+ * Upload:
  *   CLI="/Applications/Arduino IDE.app/Contents/Resources/app/lib/backend/resources/arduino-cli"
  *   "$CLI" compile --fqbn nucode:nrf52:nu40dk ~/Documents/Arduino/nu40dk_launcher
  *   "$CLI" upload  --fqbn nucode:nrf52:nu40dk -p /dev/cu.usbmodem1101 ~/Documents/Arduino/nu40dk_launcher
  */
 
-// 이 보드의 Serial은 TinyUSB CDC라 이 헤더가 없으면 링크 에러가 난다
+// This board's Serial is TinyUSB CDC; without this header you get a link error
 #include <Adafruit_TinyUSB.h>
 #include <math.h>
 
 const uint8_t LEDS[4]    = { PIN_LED1, PIN_LED2, PIN_LED3, PIN_LED4 };
 const uint8_t BUTTONS[4] = { PIN_BUTTON1, PIN_BUTTON2, PIN_BUTTON3, PIN_BUTTON4 };
 
-// ---------------------------------------------------------------- 조절값
+// ---------------------------------------------------------------- tunables
 
-// 채터링 무시 구간(ms). 택트 스위치는 접점이 붙는 순간 1~5ms 동안 여러 번 튄다.
-// 너무 키우면 빠르게 두 번 누르는 게 한 번으로 먹힌다.
+// Debounce window (ms). A tact switch bounces several times for 1-5 ms as the contacts close.
+// If too large, a fast double press gets swallowed into one.
 const uint16_t DEBOUNCE_MS = 30;
 
-// 누른 뒤 LED가 남아서 빛나는 시간(ms). 눌렀다는 걸 눈으로 확인시켜주는 용도다.
-// 앱이 실제로 뜨기까지의 공백을 이게 메운다.
+// How long (ms) the LED keeps glowing after a press. It lets you see by eye that the press registered.
+// It fills the gap until the app actually appears.
 const uint16_t AFTERGLOW_MS = 400;
 
-// 대기 중 숨쉬기 밝기(0.0~1.0)와 주기(ms).
-// 꺼두면 책상 위에서 죽은 보드로 보인다. 너무 밝으면 눌린 LED와 구분이 안 된다.
+// Idle breathing brightness (0.0-1.0) and period (ms).
+// If off, the board looks dead on the desk. If too bright, it is hard to tell from a pressed LED.
 const float    IDLE_LEVEL  = 0.05f;
 const uint16_t IDLE_PERIOD = 4200;
 
-// ---------------------------------------------------------------- 내부 상태
+// ---------------------------------------------------------------- internal state
 
 static uint16_t gammaLut[256];
 
 struct Button {
-  bool     stable;      // 디바운스를 통과한 현재 상태 (true = 눌림)
-  bool     lastRaw;     // 직전에 읽은 원시 상태
-  uint32_t changedAt;   // lastRaw가 바뀐 시각
-  uint32_t glowUntil;   // 이 시각까지 LED를 켜둔다
+  bool     stable;      // current state after debounce (true = pressed)
+  bool     lastRaw;     // raw state read last time
+  uint32_t changedAt;   // time lastRaw changed
+  uint32_t glowUntil;   // keep the LED on until this time
 };
 
 static Button btn[4];
 
-// 사람 눈은 밝기를 로그로 느낀다. PWM 값을 그대로 쓰면 어두운 쪽이 뭉쳐 보인다.
+// Human eyes perceive brightness logarithmically. Using raw PWM values makes the dark end look bunched up.
 static void buildGamma() {
   for (uint16_t i = 0; i < 256; i++) {
     gammaLut[i] = (uint16_t) lroundf(powf(i / 255.0f, 2.6f) * 4095.0f);
@@ -68,7 +68,7 @@ static void writeLed(uint8_t idx, float level) {
   analogWrite(LEDS[idx], gammaLut[(uint8_t) lroundf(level * 255.0f)]);
 }
 
-// 대기 중 밝기. sin을 0~1로 접어 아주 느리게 부풀렸다 꺼뜨린다.
+// Idle brightness. Fold a sin wave to 0-1 and swell and fade very slowly.
 static float idleLevel(uint32_t now) {
   float phase = (float) (now % IDLE_PERIOD) / (float) IDLE_PERIOD;
   return IDLE_LEVEL * (0.5f - 0.5f * cosf(phase * 2.0f * PI));
@@ -84,7 +84,7 @@ void setup() {
     pinMode(LEDS[i], OUTPUT);
     writeLed(i, 0.0f);
 
-    // 버튼은 active-low. 풀업을 켜야 안 눌렸을 때 HIGH로 떠 있는다
+    // Buttons are active-low. The pull-up must be enabled so the pin reads HIGH when not pressed
     pinMode(BUTTONS[i], INPUT_PULLUP);
 
     btn[i].stable    = false;
@@ -93,8 +93,8 @@ void setup() {
     btn[i].glowUntil = 0;
   }
 
-  // 시리얼 모니터가 붙을 때까지 최대 3초 기다린다. 안 붙어도 그냥 진행한다 —
-  // 보드는 Mac에 프로그램이 떠 있든 말든 혼자 돌아야 한다
+  // Wait up to 3 s for the serial monitor to attach. Proceed anyway if it doesn't —
+  // the board must run on its own whether or not a program is running on the Mac
   uint32_t start = millis();
   while (!Serial && millis() - start < 3000) delay(10);
 
@@ -108,21 +108,21 @@ void loop() {
   for (uint8_t i = 0; i < 4; i++) {
     bool raw = (digitalRead(BUTTONS[i]) == LOW);
 
-    // 원시 상태가 흔들리는 동안은 시계만 리셋하고 판단을 미룬다
+    // While the raw state is jittering, only reset the clock and defer the decision
     if (raw != btn[i].lastRaw) {
       btn[i].lastRaw   = raw;
       btn[i].changedAt = now;
     } else if (raw != btn[i].stable && now - btn[i].changedAt >= DEBOUNCE_MS) {
       btn[i].stable = raw;
 
-      // 눌린 순간에만 알린다. 뗄 때는 조용히 넘어간다
+      // Report only at the moment of press. Stay quiet on release
       if (raw) {
         Serial.printf("BTN%d\n", i + 1);
         btn[i].glowUntil = now + AFTERGLOW_MS;
       }
     }
 
-    // 누르고 있는 동안은 계속 켜두고, 뗀 뒤에는 잔광이 끝날 때까지 켜둔다
+    // Keep it on while held; after release, keep it on until the afterglow ends
     bool lit = btn[i].stable || (int32_t) (btn[i].glowUntil - now) > 0;
     writeLed(i, lit ? 1.0f : idle);
   }
